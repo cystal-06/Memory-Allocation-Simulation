@@ -1,6 +1,12 @@
 *.o
 memory_sim
-SPECIFICATION.*
-SLIDE_BAO_CAO.*
+SPECIFICATION*
+SLIDE_BAO_CAO*
 *.docx
+*.pptx
+*.pdf
 *.csv
+*bao_cao*
+*slide*
+*report*
+*spec*
