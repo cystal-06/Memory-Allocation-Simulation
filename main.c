@@ -60,6 +60,7 @@ static void run_interactive_shell(void) {
         printf("5. Free Process by PID\n");
         printf("6. Explicit Coalesce Free Memory Blocks\n");
         printf("7. Render HTOP Visual Dashboard\n");
+        printf("8. View Evaluation & Statistics Report \n");
         printf("0. Return to Main Menu\n");
         printf("Enter selection: ");
         if (scanf("%d", &choice) != 1) {
@@ -93,6 +94,8 @@ static void run_interactive_shell(void) {
             render_htop_view("[INTERACTIVE] Adjacent free blocks coalesced.");
         } else if (choice == 7) {
             render_htop_view("[INTERACTIVE] Current state inspected.");
+        } else if (choice == 8) {
+            print_evaluation_report();
         }
     }
     cleanup_memory();

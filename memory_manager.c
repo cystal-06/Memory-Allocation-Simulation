@@ -9,11 +9,10 @@ MemoryBlock* memory_head = NULL;
 MemoryBlock* last_allocated_block = NULL;
 
 static int g_total_memory_size = 0;
-static int g_total_alloc_requests = 0;
-static int g_successful_allocs = 0;
-static int g_total_search_steps = 0;
-static BenchmarkResult g_last_benchmark_results[4];
-static bool g_has_benchmark_results = false;
+
+int get_total_memory_size(void) {
+    return g_total_memory_size;
+}
 
 void init_memory(int total_size) {
     if (total_size <= 0) {
@@ -246,7 +245,7 @@ void print_memory_state(void) {
     render_htop_view("Telemetry snapshot captured.");
 }
 
-static void split_block(MemoryBlock* target, Process proc) {
+void split_block(MemoryBlock* target, Process proc) {
     if (target == NULL || target->is_allocated || target->size < proc.size_needed) {
         return;
     }
@@ -375,37 +374,7 @@ bool allocate_best_fit(Process proc) {
     return false;
 }
 
-bool allocate_worst_fit(Process proc) {
-    g_total_alloc_requests++;
-    if (memory_head == NULL || proc.process_id <= 0 || proc.size_needed <= 0 || is_pid_active(proc.process_id)) {
-        return false;
-    }
 
-    MemoryBlock* curr = memory_head;
-    MemoryBlock* worst_block = NULL;
-    int max_size = -1;
-    int steps = 0;
-
-    while (curr != NULL) {
-        steps++;
-        if (!curr->is_allocated && curr->size >= proc.size_needed) {
-            if (curr->size > max_size) {
-                max_size = curr->size;
-                worst_block = curr;
-            }
-        }
-        curr = curr->next;
-    }
-
-    g_total_search_steps += steps;
-    if (worst_block != NULL) {
-        split_block(worst_block, proc);
-        g_successful_allocs++;
-        return true;
-    }
-
-    return false;
-}
 
 bool allocate_memory(Process proc, AlgorithmType algo) {
     switch (algo) {
