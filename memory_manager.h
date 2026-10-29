@@ -3,6 +3,13 @@
 
 #include <stdbool.h>
 
+typedef enum {
+    ALGO_FIRST_FIT,
+    ALGO_NEXT_FIT,
+    ALGO_BEST_FIT,
+    ALGO_WORST_FIT
+} AlgorithmType;
+
 typedef struct Process {
     int process_id;
     int size_needed;
@@ -16,6 +23,19 @@ typedef struct MemoryBlock {
     struct MemoryBlock* next;
 } MemoryBlock;
 
+typedef struct BenchmarkResult {
+    AlgorithmType algo;
+    const char* algo_name;
+    int total_requests;
+    int successful_allocs;
+    int failed_allocs;
+    int total_search_steps;
+    double avg_search_steps;
+    double final_mem_usage_pct;
+    double final_ext_frag_pct;
+    int max_hole_size;
+} BenchmarkResult;
+
 extern MemoryBlock* memory_head;
 extern MemoryBlock* last_allocated_block;
 
@@ -23,8 +43,15 @@ void init_memory(int total_size);
 void print_memory_state(void);
 void render_htop_view(const char* current_event);
 void free_memory(int process_id);
+void coalesce_memory(void);
 void cleanup_memory(void);
 
+bool allocate_first_fit(Process proc);
 bool allocate_next_fit(Process proc);
+bool allocate_best_fit(Process proc);
+bool allocate_worst_fit(Process proc);
+bool allocate_memory(Process proc, AlgorithmType algo);
+
+void run_comparison_benchmark(int total_size);
 
 #endif

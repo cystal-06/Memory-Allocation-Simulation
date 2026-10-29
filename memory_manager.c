@@ -3,7 +3,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
-#include <time.h>
 #include "memory_manager.h"
 
 MemoryBlock* memory_head = NULL;
@@ -262,6 +261,29 @@ static void split_block(MemoryBlock* target, Process proc) {
     target->next = remainder_block;
 }
 
+bool allocate_first_fit(Process proc) {
+    g_total_alloc_requests++;
+    if (memory_head == NULL || proc.process_id <= 0 || proc.size_needed <= 0) {
+        return false;
+    }
+
+    MemoryBlock* curr = memory_head;
+    int steps = 0;
+    while (curr != NULL) {
+        steps++;
+        if (!curr->is_allocated && curr->size >= proc.size_needed) {
+            split_block(curr, proc);
+            g_successful_allocs++;
+            g_total_search_steps += steps;
+            return true;
+        }
+        curr = curr->next;
+    }
+
+    g_total_search_steps += steps;
+    return false;
+}
+
 bool allocate_next_fit(Process proc) {
     g_total_alloc_requests++;
 
@@ -304,6 +326,105 @@ bool allocate_next_fit(Process proc) {
     return false;
 }
 
+bool allocate_best_fit(Process proc) {
+    g_total_alloc_requests++;
+    if (memory_head == NULL || proc.process_id <= 0 || proc.size_needed <= 0) {
+        return false;
+    }
+
+    MemoryBlock* curr = memory_head;
+    MemoryBlock* best_block = NULL;
+    int min_diff = 1000000000;
+    int steps = 0;
+
+    while (curr != NULL) {
+        steps++;
+        if (!curr->is_allocated && curr->size >= proc.size_needed) {
+            int diff = curr->size - proc.size_needed;
+            if (diff < min_diff) {
+                min_diff = diff;
+                best_block = curr;
+                if (diff == 0) {
+                    break;
+                }
+            }
+        }
+        curr = curr->next;
+    }
+
+    g_total_search_steps += steps;
+    if (best_block != NULL) {
+        split_block(best_block, proc);
+        g_successful_allocs++;
+        return true;
+    }
+
+    return false;
+}
+
+bool allocate_worst_fit(Process proc) {
+    g_total_alloc_requests++;
+    if (memory_head == NULL || proc.process_id <= 0 || proc.size_needed <= 0) {
+        return false;
+    }
+
+    MemoryBlock* curr = memory_head;
+    MemoryBlock* worst_block = NULL;
+    int max_size = -1;
+    int steps = 0;
+
+    while (curr != NULL) {
+        steps++;
+        if (!curr->is_allocated && curr->size >= proc.size_needed) {
+            if (curr->size > max_size) {
+                max_size = curr->size;
+                worst_block = curr;
+            }
+        }
+        curr = curr->next;
+    }
+
+    g_total_search_steps += steps;
+    if (worst_block != NULL) {
+        split_block(worst_block, proc);
+        g_successful_allocs++;
+        return true;
+    }
+
+    return false;
+}
+
+bool allocate_memory(Process proc, AlgorithmType algo) {
+    switch (algo) {
+        case ALGO_FIRST_FIT: return allocate_first_fit(proc);
+        case ALGO_NEXT_FIT:  return allocate_next_fit(proc);
+        case ALGO_BEST_FIT:  return allocate_best_fit(proc);
+        case ALGO_WORST_FIT: return allocate_worst_fit(proc);
+        default: return false;
+    }
+}
+
+void coalesce_memory(void) {
+    if (memory_head == NULL) {
+        return;
+    }
+
+    MemoryBlock* current = memory_head;
+    while (current != NULL && current->next != NULL) {
+        if (!current->is_allocated && !current->next->is_allocated) {
+            MemoryBlock* temp = current->next;
+            current->size += temp->size;
+            current->next = temp->next;
+            if (last_allocated_block == temp) {
+                last_allocated_block = current;
+            }
+            free(temp);
+        } else {
+            current = current->next;
+        }
+    }
+}
+
 void free_memory(int process_id) {
     if (memory_head == NULL) {
         return;
@@ -320,6 +441,8 @@ void free_memory(int process_id) {
         }
         current = current->next;
     }
+
+    coalesce_memory();
 }
 
 void cleanup_memory(void) {
@@ -335,4 +458,113 @@ void cleanup_memory(void) {
     g_total_alloc_requests = 0;
     g_successful_allocs = 0;
     g_total_search_steps = 0;
+}
+
+static BenchmarkResult evaluate_single_algo(AlgorithmType algo, const char* name, int ram_size) {
+    init_memory(ram_size);
+
+    Process test_suite[] = {
+        {.process_id = 1, .size_needed = 120},
+        {.process_id = 2, .size_needed = 180},
+        {.process_id = 3, .size_needed = 90},
+        {.process_id = 4, .size_needed = 220},
+        {.process_id = 5, .size_needed = 150},
+        {.process_id = 6, .size_needed = 80},
+        {.process_id = 7, .size_needed = 110},
+        {.process_id = 8, .size_needed = 70}
+    };
+    int total_procs = sizeof(test_suite) / sizeof(test_suite[0]);
+
+    for (int i = 0; i < total_procs; i++) {
+        allocate_memory(test_suite[i], algo);
+    }
+
+    free_memory(2);
+    free_memory(4);
+    free_memory(6);
+
+    Process late_arrivals[] = {
+        {.process_id = 9,  .size_needed = 100},
+        {.process_id = 10, .size_needed = 130},
+        {.process_id = 11, .size_needed = 160},
+        {.process_id = 12, .size_needed = 75}
+    };
+    int late_count = sizeof(late_arrivals) / sizeof(late_arrivals[0]);
+
+    for (int i = 0; i < late_count; i++) {
+        allocate_memory(late_arrivals[i], algo);
+    }
+
+    int total_allocated = 0;
+    int total_free = 0;
+    int max_hole = 0;
+
+    MemoryBlock* curr = memory_head;
+    while (curr != NULL) {
+        if (curr->is_allocated) {
+            total_allocated += curr->size;
+        } else {
+            total_free += curr->size;
+            if (curr->size > max_hole) {
+                max_hole = curr->size;
+            }
+        }
+        curr = curr->next;
+    }
+
+    BenchmarkResult res;
+    res.algo = algo;
+    res.algo_name = name;
+    res.total_requests = g_total_alloc_requests;
+    res.successful_allocs = g_successful_allocs;
+    res.failed_allocs = g_total_alloc_requests - g_successful_allocs;
+    res.total_search_steps = g_total_search_steps;
+    res.avg_search_steps = (g_successful_allocs > 0) ? ((double)g_total_search_steps / g_successful_allocs) : 0.0;
+    res.final_mem_usage_pct = (ram_size > 0) ? (total_allocated * 100.0 / ram_size) : 0.0;
+    res.final_ext_frag_pct = (total_free > 0) ? (1.0 - (double)max_hole / total_free) * 100.0 : 0.0;
+    res.max_hole_size = max_hole;
+
+    cleanup_memory();
+    return res;
+}
+
+void run_comparison_benchmark(int total_size) {
+    BenchmarkResult ff = evaluate_single_algo(ALGO_FIRST_FIT, "First Fit", total_size);
+    BenchmarkResult nf = evaluate_single_algo(ALGO_NEXT_FIT,  "Next Fit",  total_size);
+    BenchmarkResult bf = evaluate_single_algo(ALGO_BEST_FIT,  "Best Fit",  total_size);
+    BenchmarkResult wf = evaluate_single_algo(ALGO_WORST_FIT, "Worst Fit", total_size);
+
+    printf("\n\033[1;37;44m ========================================================================================= \033[0m\n");
+    printf("\033[1;37;44m  SCIENTIFIC BENCHMARK REPORT: ALLOCATION STRATEGY PERFORMANCE EVALUATION                 \033[0m\n");
+    printf("\033[1;37;44m ========================================================================================= \033[0m\n");
+    printf(" Test Workload: 12 Mixed Processes (Alloc & Free holes) | Initial RAM: \033[1;32m%d Bytes\033[0m\n\n", total_size);
+
+    printf("\033[46;30m ALGORITHM   TOTAL REQ   SUCCESS   FAILED   SUCCESS_RATE   AVG_STEPS   MEM_USAGE%%   EFR_FRAG%% \033[0m\n");
+
+    BenchmarkResult list[] = {ff, nf, bf, wf};
+    for (int i = 0; i < 4; i++) {
+        double s_rate = (list[i].successful_allocs * 100.0) / list[i].total_requests;
+        printf(" \033[1;37m%-11s\033[0m %-11d \033[1;32m%-9d\033[0m \033[1;31m%-8d\033[0m \033[1;33m%11.1f%%\033[0m   \033[1;36m%9.2f\033[0m   \033[1;32m%9.1f%%\033[0m   \033[1;35m%8.1f%%\033[0m\n",
+               list[i].algo_name,
+               list[i].total_requests,
+               list[i].successful_allocs,
+               list[i].failed_allocs,
+               s_rate,
+               list[i].avg_search_steps,
+               list[i].final_mem_usage_pct,
+               list[i].final_ext_frag_pct);
+    }
+
+    printf("+-----------------------------------------------------------------------------------------+\n");
+    printf("\033[1;33m EVALUATION SUMMARY:\033[0m\n");
+    printf(" • Fast Search (Fewest steps)   : \033[1;32m%s\033[0m (Avg %.2f steps)\n",
+           (nf.avg_search_steps < ff.avg_search_steps ? "Next Fit" : "First Fit"),
+           (nf.avg_search_steps < ff.avg_search_steps ? nf.avg_search_steps : ff.avg_search_steps));
+    printf(" • Lowest Fragmentation (EFR)   : \033[1;32m%s\033[0m (%.1f%% EFR)\n",
+           (bf.final_ext_frag_pct <= wf.final_ext_frag_pct ? "Best Fit" : "Worst Fit"),
+           (bf.final_ext_frag_pct <= wf.final_ext_frag_pct ? bf.final_ext_frag_pct : wf.final_ext_frag_pct));
+    printf(" • Best Allocation Success Rate : \033[1;32m%s\033[0m (%.1f%%)\n",
+           (bf.successful_allocs >= ff.successful_allocs ? "Best Fit" : "First Fit"),
+           (bf.successful_allocs >= ff.successful_allocs ? (bf.successful_allocs * 100.0 / bf.total_requests) : (ff.successful_allocs * 100.0 / ff.total_requests)));
+    printf("+=========================================================================================+\n\n");
 }
