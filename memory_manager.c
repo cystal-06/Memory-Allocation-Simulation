@@ -3,6 +3,7 @@
 #include "memory_manager.h"
 
 MemoryBlock* memory_head = NULL;
+MemoryBlock* last_allocated_block = NULL;
 
 void init_memory(int total_size) {
     if (total_size <= 0) {
@@ -27,6 +28,7 @@ void init_memory(int total_size) {
     initial_block->next = NULL;
 
     memory_head = initial_block;
+    last_allocated_block = initial_block;
 
     printf("[HỆ THỐNG] Khởi tạo bộ nhớ mô phỏng thành công: Tổng dung lượng = %d Bytes.\n", total_size);
 }
@@ -79,31 +81,68 @@ void print_memory_state(void) {
     printf("+===========================================================================+\n\n");
 }
 
-void coalesce_memory(void) {
-    if (memory_head == NULL) {
+static void split_block(MemoryBlock* target, Process proc) {
+    if (target == NULL || target->is_allocated || target->size < proc.size_needed) {
         return;
     }
 
-    MemoryBlock* current = memory_head;
-    int merge_count = 0;
+    if (target->size == proc.size_needed) {
+        target->is_allocated = true;
+        target->process_id = proc.process_id;
+        return;
+    }
 
-    while (current != NULL && current->next != NULL) {
-        if (!current->is_allocated && !current->next->is_allocated) {
-            MemoryBlock* duplicate_node = current->next;
+    MemoryBlock* remainder_block = (MemoryBlock*)malloc(sizeof(MemoryBlock));
+    if (remainder_block == NULL) {
+        printf("[LỖI NGHIÊM TRỌNG] Không đủ bộ nhớ Heap để tạo node phần dư!\n");
+        exit(EXIT_FAILURE);
+    }
 
-            current->size += duplicate_node->size;
-            current->next = duplicate_node->next;
-            free(duplicate_node);
+    remainder_block->start_address = target->start_address + proc.size_needed;
+    remainder_block->size = target->size - proc.size_needed;
+    remainder_block->is_allocated = false;
+    remainder_block->process_id = -1;
+    remainder_block->next = target->next;
 
-            merge_count++;
-        } else {
-            current = current->next;
+    target->size = proc.size_needed;
+    target->is_allocated = true;
+    target->process_id = proc.process_id;
+    target->next = remainder_block;
+}
+
+bool allocate_next_fit(Process proc) {
+    if (memory_head == NULL || proc.process_id <= 0 || proc.size_needed <= 0) {
+        return false;
+    }
+
+    if (last_allocated_block == NULL) {
+        last_allocated_block = memory_head;
+    }
+
+    MemoryBlock* start = last_allocated_block;
+    MemoryBlock* current = start;
+    bool wrapped_around = false;
+
+    while (current != NULL) {
+        if (!current->is_allocated && current->size >= proc.size_needed) {
+            split_block(current, proc);
+            last_allocated_block = current;
+            return true;
+        }
+
+        current = current->next;
+
+        if (current == NULL && !wrapped_around) {
+            current = memory_head;
+            wrapped_around = true;
+        }
+
+        if (wrapped_around && current == start) {
+            break;
         }
     }
 
-    if (merge_count > 0) {
-        printf("[GOM CỤM] Đã thực hiện %d lần gộp các khối nhớ trống liền kề.\n", merge_count);
-    }
+    return false;
 }
 
 void free_memory(int process_id) {
@@ -122,16 +161,16 @@ void free_memory(int process_id) {
             found = true;
             printf("[GIẢI PHÓNG] Đã thu hồi khối nhớ tại địa chỉ %d (kích thước %d Bytes) của PID %d.\n",
                    current->start_address, current->size, process_id);
+            if (last_allocated_block == current) {
+                last_allocated_block = memory_head;
+            }
         }
         current = current->next;
     }
 
     if (!found) {
         printf("[CẢNH BÁO] Không tìm thấy khối nhớ nào thuộc về Process ID: %d!\n", process_id);
-        return;
     }
-
-    coalesce_memory();
 }
 
 void cleanup_memory(void) {
@@ -142,5 +181,6 @@ void cleanup_memory(void) {
         current = next_node;
     }
     memory_head = NULL;
+    last_allocated_block = NULL;
     printf("[HỆ THỐNG] Đã giải phóng toàn bộ tài nguyên cấu trúc bộ nhớ.\n");
 }
