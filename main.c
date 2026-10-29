@@ -80,7 +80,7 @@ static void run_interactive_shell(void) {
             if (ok) {
                 render_htop_view("[INTERACTIVE] Process allocated successfully.");
             } else {
-                printf("\033[1;31m[ERROR] Allocation rejected. Out of suitable memory blocks.\033[0m\n");
+                printf("\033[1;31m[ERROR] Allocation rejected. PID duplicate or out of suitable memory blocks.\033[0m\n");
             }
         } else if (choice == 5) {
             int pid;
@@ -105,11 +105,12 @@ int main(void) {
         printf("\033[1;37;44m   MEMORY ALLOCATION SIMULATION & EVALUATION SYSTEM IN C              \033[0m\n");
         printf("\033[1;37;44m ==================================================================== \033[0m\n");
         printf(" \033[1;33m1.\033[0m Run Live HTOP Visual Demo (Real-time Next-Fit Animation)\n");
-        printf(" \033[1;33m2.\033[0m Run 4-Algorithm Comparative Benchmark (First/Next/Best/Worst Fit)\n");
-        printf(" \033[1;33m3.\033[0m Launch Interactive CLI Memory Controller Shell\n");
+        printf(" \033[1;33m2.\033[0m Run 4-Algorithm Comparative Benchmark & Export CSV\n");
+        printf(" \033[1;33m3.\033[0m Run Monte-Carlo Stress Test (50 Randomized Processes)\n");
+        printf(" \033[1;33m4.\033[0m Launch Interactive CLI Memory Controller Shell\n");
         printf(" \033[1;31m0.\033[0m Exit Program\n");
         printf("--------------------------------------------------------------------\n");
-        printf("Select mode [0-3]: ");
+        printf("Select mode [0-4]: ");
 
         if (scanf("%d", &opt) != 1) {
             int c;
@@ -117,7 +118,7 @@ int main(void) {
             continue;
         }
 
-        getchar(); // consume newline
+        getchar();
 
         switch (opt) {
             case 1:
@@ -129,13 +130,18 @@ int main(void) {
                 getchar();
                 break;
             case 3:
+                run_stress_test_benchmark(2000, 50);
+                printf("Press Enter to return to menu...");
+                getchar();
+                break;
+            case 4:
                 run_interactive_shell();
                 break;
             case 0:
                 printf("\033[1;32mExiting memory simulator. Goodbye!\033[0m\n");
                 break;
             default:
-                printf("\033[1;31mInvalid option. Please choose [0-3].\033[0m\n");
+                printf("\033[1;31mInvalid option. Please choose [0-4].\033[0m\n");
                 break;
         }
     }

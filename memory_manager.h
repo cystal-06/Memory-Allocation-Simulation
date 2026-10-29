@@ -46,6 +46,7 @@ void free_memory(int process_id);
 void coalesce_memory(void);
 void cleanup_memory(void);
 
+bool is_pid_active(int process_id);
 bool allocate_first_fit(Process proc);
 bool allocate_next_fit(Process proc);
 bool allocate_best_fit(Process proc);
@@ -53,5 +54,7 @@ bool allocate_worst_fit(Process proc);
 bool allocate_memory(Process proc, AlgorithmType algo);
 
 void run_comparison_benchmark(int total_size);
+void run_stress_test_benchmark(int total_size, int num_processes);
+void export_benchmark_csv(const char* filepath);
 
 #endif
