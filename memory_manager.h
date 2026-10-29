@@ -17,11 +17,13 @@ typedef struct MemoryBlock {
 } MemoryBlock;
 
 extern MemoryBlock* memory_head;
+extern MemoryBlock* last_allocated_block;
 
 void init_memory(int total_size);
 void print_memory_state(void);
 void free_memory(int process_id);
-void coalesce_memory(void);
 void cleanup_memory(void);
+
+bool allocate_next_fit(Process proc);
 
 #endif
