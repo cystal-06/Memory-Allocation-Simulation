@@ -21,6 +21,7 @@ extern MemoryBlock* last_allocated_block;
 
 void init_memory(int total_size);
 void print_memory_state(void);
+void render_htop_view(const char* current_event);
 void free_memory(int process_id);
 void cleanup_memory(void);
 

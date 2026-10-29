@@ -1,45 +1,53 @@
+#define _DEFAULT_SOURCE
 #include <stdio.h>
 #include <stdlib.h>
+#include <unistd.h>
 #include "memory_manager.h"
 
+static void delay_animation(void) {
+    usleep(1400000);
+}
+
 int main(void) {
-    printf("=====================================================================\n");
-    printf("  KIỂM THỬ MODULE THÀNH VIÊN 1 (TRƯỞNG NHÓM): BASE & NEXT FIT ALGO   \n");
-    printf("=====================================================================\n\n");
-
-    printf(">>> BƯỚC 1: Khởi tạo 1000 Bytes RAM mô phỏng...\n");
     init_memory(1000);
-    print_memory_state();
+    render_htop_view("Khoi tao RAM 1000 Bytes ban dau thanh cong.");
+    delay_animation();
 
-    printf(">>> BƯỚC 2: Cấp phát tuần tự bằng thuật toán NEXT FIT...\n");
     Process p1 = {.process_id = 1, .size_needed = 200};
-    Process p2 = {.process_id = 2, .size_needed = 300};
-    Process p3 = {.process_id = 3, .size_needed = 250};
-
     allocate_next_fit(p1);
-    printf("[NEXT FIT] Đã cấp phát cho Process 1 (200B). Con trỏ lưu vết tại khối P1.\n");
-    
+    render_htop_view("[EVENT] Next Fit: Cap phat Process 1 (200B) tai dia chi 0.");
+    delay_animation();
+
+    Process p2 = {.process_id = 2, .size_needed = 300};
     allocate_next_fit(p2);
-    printf("[NEXT FIT] Đã cấp phát cho Process 2 (300B). Tìm tiếp từ sau khối P1.\n");
+    render_htop_view("[EVENT] Next Fit: Cap phat Process 2 (300B) tiep tuc sau P1 (tai dia chi 200).");
+    delay_animation();
 
+    Process p3 = {.process_id = 3, .size_needed = 250};
     allocate_next_fit(p3);
-    printf("[NEXT FIT] Đã cấp phát cho Process 3 (250B). Tìm tiếp từ sau khối P2.\n");
-    print_memory_state();
+    render_htop_view("[EVENT] Next Fit: Cap phat Process 3 (250B) tiep tuc sau P2 (tai dia chi 500).");
+    delay_animation();
 
-    printf(">>> BƯỚC 3: Giải phóng Process 1 (200B)...\n");
     free_memory(1);
-    print_memory_state();
+    render_htop_view("[EVENT] Giai phong Process 1 (200B). Dia chi 0-199 tro thanh FREE!");
+    delay_animation();
 
-    printf(">>> BƯỚC 4: Cấp phát Process 4 (150B) để kiểm tra xoay vòng (Wrap-around)...\n");
     Process p4 = {.process_id = 4, .size_needed = 150};
-    if (allocate_next_fit(p4)) {
-        printf("[NEXT FIT] Thành công! Next Fit duyệt hết cuối RAM và quay vòng về đầu để lấy khối trống của P1 vừa nhả.\n");
-    }
-    print_memory_state();
+    allocate_next_fit(p4);
+    render_htop_view("[EVENT] Next Fit: Cap phat Process 4 (150B) vao khoi cuoi cung (750-899).");
+    delay_animation();
 
-    printf(">>> BƯỚC 5: Dọn dẹp tài nguyên (Chống rò rỉ bộ nhớ)...\n");
+    Process p5 = {.process_id = 5, .size_needed = 180};
+    allocate_next_fit(p5);
+    render_htop_view("[EVENT] NEXT FIT WRAP-AROUND! Quet toi cuoi RAM khong du -> Xoay vong ve dau RAM cap phat P5 (180B) vao vung P1 cu!");
+    delay_animation();
+
+    free_memory(2);
+    render_htop_view("[EVENT] Giai phong Process 2 (300B) tai dia chi 200. Hoan tat chu trinh mo phong.");
+
+    printf("\n\033[1;32m[XONG] Mo phong thoi gian thuc hoan tat. Nhan Enter de ket thuc...\033[0m\n");
+    getchar();
+
     cleanup_memory();
-
-    printf("\n[HOÀN TẤT] Module Trưởng nhóm hoạt động chính xác 100%%!\n");
     return 0;
 }
